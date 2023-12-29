@@ -21,28 +21,8 @@ pub struct StompFrame<'a> {
 }
 
 impl<'a> StompFrame<'a> {
-    pub fn new(
-        command: impl Into<Cow<'a, str>>,
-        headers: Vec<(&str, impl Into<Option<String>>)>,
-        body: Option<Vec<u8>>,
-        extra_headers: Vec<(String, String)>,
-    ) -> StompFrame<'a> {
-        let mut headers: Vec<_> = headers
-            .into_iter()
-            .filter_map(|(k, vv)| vv.into().map(|v| (k.to_string(), v)))
-            .collect();
-
-        headers.extend(extra_headers);
-
-        StompFrame {
-            command: command.into(),
-            headers,
-            body: body.map(Cow::Owned),
-        }
-    }
-
     pub fn serialize(&self) -> BytesMut {
-        let mut buffer = bytes::BytesMut::new();
+        let mut buffer = BytesMut::new();
         let buf = &mut buffer;
         fn write_escaped(b: u8, buffer: &mut BytesMut) {
             let escaped: &[u8] = match b {
@@ -53,16 +33,6 @@ impl<'a> StompFrame<'a> {
                 b => return buffer.put_u8(b),
             };
             buffer.put_slice(escaped)
-        }
-        let requires = self.command.len()
-            + self.body.as_ref().map(|b| b.len() + 20).unwrap_or(0)
-            + self
-                .headers
-                .iter()
-            .fold(0, |acc, (k, v)| acc + k.len() + v.len())
-            + 30;
-        if buf.remaining_mut() < requires {
-            buf.reserve(requires);
         }
         buf.put_slice(self.command.as_bytes());
         buf.put_u8(b'\n');
@@ -169,8 +139,8 @@ fn get_content_length_header(body: &[u8]) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use nom::AsBytes;
     use super::*;
+    use nom::AsBytes;
     use pretty_assertions::{assert_eq, assert_matches};
 
     #[test]
@@ -376,14 +346,17 @@ version:1.2
 
     #[test]
     fn test_parser_header_unescape() {
-        let h = parse_frame(b"MESSAGE
+        let h = parse_frame(
+            b"MESSAGE
 subscription:11
 message-id:0.4.0
 destination:now\\c Instant {\\n    tv_sec\\c 5740,\\n    tv_nsec\\c 164006416,\\n}
 content-type:application/json
 server:tokio-stomp/0.4.0
 
-body\0".as_ref());
+body\0"
+                .as_ref(),
+        );
         dbg!(&h);
         assert_matches!(h, Ok((b"", StompFrame{ body:Some(ref b) ,..})) if b.as_ref() == b"body");
     }
@@ -396,9 +369,12 @@ body\0".as_ref());
             headers: vec![],
         };
 
-        assert_eq!(f.serialize().as_ref(), b"MESSAGE
+        assert_eq!(
+            f.serialize().as_ref(),
+            b"MESSAGE
 
-\0");
+\0"
+        );
 
         let f = StompFrame {
             command: "MESSAGE".into(),
@@ -406,10 +382,13 @@ body\0".as_ref());
             headers: vec![],
         };
 
-        assert_eq!(f.serialize().as_ref(), b"MESSAGE
+        assert_eq!(
+            f.serialize().as_ref(),
+            b"MESSAGE
 content-length:4
 
-body\0");
+body\0"
+        );
 
         let f = StompFrame {
             command: "MESSAGE".into(),
@@ -417,10 +396,37 @@ body\0");
             headers: vec![("name\r\n:\\end".to_string(), "value\r\n:".to_string())],
         };
 
-        assert_eq!(f.serialize().as_ref(), b"MESSAGE
+        assert_eq!(
+            f.serialize().as_ref(),
+            b"MESSAGE
 name\\r\\n\\c\\\\end:value\\r\\n\\c
 content-length:4
 
-body\0")
+body\0"
+        );
+    }
+
+    #[test]
+    fn test_long_body() {
+        let body = "body".repeat(1000);
+        let f = StompFrame {
+            command: "MESSAGE".into(),
+            body: Some(body.as_bytes().into()),
+            headers: vec![("name\r\n:\\end".to_string(), "value\r\n:".to_string())],
+        };
+
+        assert_eq!(
+            f.serialize().as_ref(),
+            format!(
+                "MESSAGE
+name\\r\\n\\c\\\\end:value\\r\\n\\c
+content-length:{}
+
+{}\0",
+                body.len(),
+                body
+            )
+                .as_bytes()
+        );
     }
 }

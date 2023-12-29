@@ -21,21 +21,15 @@ jobs:
         run: cargo build --verbose
       - name: Run tests
         run: cargo test --verbose --all-features --no-fail-fast
-      - name: Run tests with coverage
-        if: matrix.rust_toolchain == 'nightly'
-        run: cargo test --verbose --all-features --no-fail-fast
-        env:
-          CARGO_INCREMENTAL: "0"
-          RUSTFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests"
-          RUSTDOCFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests"
-      - name: rust-grcov
-        if: matrix.rust_toolchain == 'nightly'
-        uses: actions-rs/grcov@v0.1
+      - name: Generate code coverage
+#        if: matrix.rust_toolchain == 'nightly'
+        run: |
+          cargo install cargo-tarpaulin
+          cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out lcov
       - name: Codecov
-        if: matrix.rust_toolchain == 'nightly'
         uses: codecov/codecov-action@v3
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
         with:
           verbose: true
-          fail_ci_if_error: true
+          fail_ci_if_error: false
