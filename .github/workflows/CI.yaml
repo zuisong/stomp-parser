@@ -14,17 +14,18 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: hecrj/setup-rust-action@v1
+      - uses: dtolnay/rust-toolchain@master
         with:
-          rust-version: ${{ matrix.rust_toolchain }}
+          toolchain: ${{ matrix.rust_toolchain }}
+          components: clippy, rustfmt
+      - uses: cargo-bins/cargo-binstall@main
       - name: Build
         run: cargo build --verbose
       - name: Run tests
         run: cargo test --verbose --all-features --no-fail-fast
       - name: Generate code coverage
-#        if: matrix.rust_toolchain == 'nightly'
         run: |
-          cargo install cargo-tarpaulin
+          cargo binstall cargo-tarpaulin --no-confirm
           cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out lcov
       - name: Codecov
         uses: codecov/codecov-action@v3
