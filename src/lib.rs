@@ -59,7 +59,7 @@ impl<'a> StompFrame<'a> {
             + self
                 .headers
                 .iter()
-                .fold(0, |acc, &(ref k, ref v)| acc + k.len() + v.len())
+            .fold(0, |acc, (k, v)| acc + k.len() + v.len())
             + 30;
         if buf.remaining_mut() < requires {
             buf.reserve(requires);
@@ -77,14 +77,14 @@ impl<'a> StompFrame<'a> {
             buf.put_u8(b'\n');
         });
         if let Some(ref body) = self.body {
-            buf.put_slice(&get_content_length_header(&body));
+            buf.put_slice(&get_content_length_header(body));
             buf.put_u8(b'\n');
             buf.put_slice(body);
         } else {
             buf.put_u8(b'\n');
         }
         buf.put_u8(b'\x00');
-        return buffer;
+        buffer
     }
 }
 
@@ -157,7 +157,7 @@ fn unescape(input: &[u8]) -> IResult<&[u8], String> {
                 value(":".as_bytes(), tag("c")),
             )),
         ),
-        |o| String::from_utf8(o),
+        String::from_utf8,
     );
 
     f.parse(input)
@@ -169,6 +169,7 @@ fn get_content_length_header(body: &[u8]) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
+    use nom::AsBytes;
     use super::*;
     use pretty_assertions::{assert_eq, assert_matches};
 
@@ -374,9 +375,52 @@ version:1.2
     }
 
     #[test]
-    fn test_parser_header1() {
-        let h = parse_frame(b"MESSAGE\nsubscription:11\nmessage-id:0.4.0\ndestination:now\\c Instant {\\n    tv_sec\\c 5740,\\n    tv_nsec\\c 164006416,\\n}\ncontent-type:application/json\nserver:tokio-stomp/0.4.0\n\nbody\0".as_ref());
+    fn test_parser_header_unescape() {
+        let h = parse_frame(b"MESSAGE
+subscription:11
+message-id:0.4.0
+destination:now\\c Instant {\\n    tv_sec\\c 5740,\\n    tv_nsec\\c 164006416,\\n}
+content-type:application/json
+server:tokio-stomp/0.4.0
+
+body\0".as_ref());
         dbg!(&h);
         assert_matches!(h, Ok((b"", StompFrame{ body:Some(ref b) ,..})) if b.as_ref() == b"body");
+    }
+
+    #[test]
+    fn test_serialize() {
+        let f = StompFrame {
+            command: "MESSAGE".into(),
+            body: None,
+            headers: vec![],
+        };
+
+        assert_eq!(f.serialize().as_ref(), b"MESSAGE
+
+\0");
+
+        let f = StompFrame {
+            command: "MESSAGE".into(),
+            body: Some(b"body".as_bytes().into()),
+            headers: vec![],
+        };
+
+        assert_eq!(f.serialize().as_ref(), b"MESSAGE
+content-length:4
+
+body\0");
+
+        let f = StompFrame {
+            command: "MESSAGE".into(),
+            body: Some(b"body".as_bytes().into()),
+            headers: vec![("name\r\n:\\end".to_string(), "value\r\n:".to_string())],
+        };
+
+        assert_eq!(f.serialize().as_ref(), b"MESSAGE
+name\\r\\n\\c\\\\end:value\\r\\n\\c
+content-length:4
+
+body\0")
     }
 }
