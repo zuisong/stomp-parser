@@ -49,7 +49,7 @@ impl<'a> StompFrame<'a> {
             }
             buf.push(b'\n');
         });
-        if let Some(ref body) = self.body {
+        if let Some(body) = &self.body {
             buf.extend_from_slice(&get_content_length_header(body));
             buf.push(b'\n');
             buf.extend_from_slice(body);

@@ -1,7 +1,6 @@
 use super::*;
 use nom::AsBytes;
 use pretty_assertions::{assert_eq, assert_matches};
-
 #[test]
 fn parse_and_serialize_connect() {
     let data = b"CONNECT
@@ -221,7 +220,7 @@ body\0"
 }
 
 #[test]
-fn test_serialize() {
+fn test_serialize1() {
     let f = StompFrame {
         command: "MESSAGE".into(),
         body: None,
@@ -234,7 +233,9 @@ fn test_serialize() {
 
 \0"
     );
-
+}
+#[test]
+fn test_serialize2() {
     let f = StompFrame {
         command: "MESSAGE".into(),
         body: Some(b"body".as_bytes().into()),
@@ -248,7 +249,9 @@ content-length:4
 
 body\0"
     );
-
+}
+#[test]
+fn test_serialize3() {
     let f = StompFrame {
         command: "MESSAGE".into(),
         body: Some(b"body".as_bytes().into()),
