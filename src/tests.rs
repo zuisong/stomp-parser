@@ -1,6 +1,7 @@
 use super::*;
+use assert_matches2::assert_matches;
 use nom::AsBytes;
-use pretty_assertions::{assert_eq, assert_matches};
+use pretty_assertions::assert_eq;
 #[test]
 fn parse_and_serialize_connect() {
     let data = b"CONNECT
@@ -128,10 +129,11 @@ fn parse_a_incomplete_message() {
             StompFrame {
                 ref command,
                 headers: _,
-                body: None
-            }
-        )) if command == "MESSAG"
+                body: None,
+            },
+        ))
     );
+    assert_eq!(command, "MESSAG");
 
     assert_matches!(
         parse_frame(b"\nMESSAGE\r\ndestination:datafeeds.here.co.uk".as_ref()),
@@ -145,8 +147,9 @@ fn parse_a_incomplete_message() {
 
     assert_matches!(
         parse_frame(b"\nMESSAGE\r\nheader:da\\ctafeeds.here.co.uk\n\n\0".as_ref()),
-        Ok((b"",StompFrame{ headers: ref a , .. })) if a[0].1 == "da:tafeeds.here.co.uk".to_string()
+        Ok((b"", StompFrame { headers: a, .. }))
     );
+    assert_eq!(a[0].1, "da:tafeeds.here.co.uk".to_string());
 
     assert_matches!(
         parse_frame(b"\nMESSAGE\r\ndestination:datafeeds.here.co.uk".as_ref()),
@@ -166,9 +169,10 @@ fn parse_a_incomplete_message() {
     );
     assert_matches!(
         parse_frame(b"\nMESSAGE\ncontent-length:0\n\n\0remain".as_ref()),
-        Ok((b"remain", StompFrame {   body:  Some(ref b), .. })) if b.len()==0,
+        Ok((b"remain", StompFrame { body: Some(b), .. })),
         "empty body with content-length:0, body should be Some([])"
     );
+    assert_eq!(b.len(), 0);
     assert_matches!(
         parse_frame(b"\nMESSAGE\n\n\0remain".as_ref()),
         Ok((b"remain", StompFrame { body: None, .. })),
@@ -216,7 +220,16 @@ body\0"
             .as_ref(),
     );
     dbg!(&h);
-    assert_matches!(h, Ok((b"", StompFrame{ body:Some(ref b) ,..})) if b.as_ref() == b"body");
+    assert_matches!(
+        h,
+        Ok((
+            b"",
+            StompFrame {
+                body: Some(ref b), ..
+            },
+        ))
+    );
+    assert_eq!(b.as_ref(), b"body")
 }
 
 #[test]

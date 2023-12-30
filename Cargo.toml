@@ -9,4 +9,5 @@ edition = "2021"
 nom = "7"
 
 [dev-dependencies]
-pretty_assertions = { version = "1", features = ["unstable"] }
+assert_matches2 = "0.1.2"
+pretty_assertions = { version = "1" }
