@@ -275,7 +275,7 @@ fn test_long_body() {
     };
 
     assert_eq!(
-        f.serialize().as_ref(),
+        f.serialize(),
         format!(
             "MESSAGE
 name\\r\\n\\c\\\\end:value\\r\\n\\c

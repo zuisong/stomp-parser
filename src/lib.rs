@@ -1,4 +1,3 @@
-use bytes::{BufMut as _, BytesMut};
 use nom::{
     branch::alt,
     bytes::complete::{escaped_transform, take_while_m_n},
@@ -14,7 +13,7 @@ use nom::{
 use std::borrow::Cow;
 
 #[cfg(test)]
-mod tests ;
+mod tests;
 
 #[derive(Debug)]
 pub struct StompFrame<'a> {
@@ -24,40 +23,41 @@ pub struct StompFrame<'a> {
 }
 
 impl<'a> StompFrame<'a> {
-    pub fn serialize(&self) -> BytesMut {
-        let mut buffer = BytesMut::new();
-        let buf = &mut buffer;
-        fn write_escaped(b: u8, buffer: &mut BytesMut) {
-            let escaped: &[u8] = match b {
-                b'\r' => b"\\r",
-                b'\n' => b"\\n",
-                b':' => b"\\c",
-                b'\\' => b"\\\\",
-                b => return buffer.put_u8(b),
+    pub fn serialize(&self) -> Cow<[u8]> {
+        let mut buffer = Vec::new();
+        let buf: &mut Vec<u8> = &mut buffer;
+        fn write_escaped(b: u8, buffer: &mut Vec<u8>) {
+            let binding = [b];
+            let escaped: &[u8] = match &binding {
+                b"\r" => b"\\r",
+                b"\n" => b"\\n",
+                b":" => b"\\c",
+                b"\\" => b"\\\\",
+                bytes => bytes,
             };
-            buffer.put_slice(escaped)
+            buffer.extend_from_slice(escaped)
         }
-        buf.put_slice(self.command.as_bytes());
-        buf.put_u8(b'\n');
+        buf.extend_from_slice(self.command.as_bytes());
+        buf.push(b'\n');
         self.headers.iter().for_each(|(key, ref val)| {
             for byte in key.as_bytes() {
                 write_escaped(*byte, buf);
             }
-            buf.put_u8(b':');
+            buf.push(b':');
             for byte in val.as_bytes() {
                 write_escaped(*byte, buf);
             }
-            buf.put_u8(b'\n');
+            buf.push(b'\n');
         });
         if let Some(ref body) = self.body {
-            buf.put_slice(&get_content_length_header(body));
-            buf.put_u8(b'\n');
-            buf.put_slice(body);
+            buf.extend_from_slice(&get_content_length_header(body));
+            buf.push(b'\n');
+            buf.extend_from_slice(body);
         } else {
-            buf.put_u8(b'\n');
+            buf.push(b'\n');
         }
-        buf.put_u8(b'\x00');
-        buffer
+        buf.push(b'\x00');
+        Cow::Owned(buffer)
     }
 }
 
@@ -139,4 +139,3 @@ fn unescape(input: &[u8]) -> IResult<&[u8], String> {
 fn get_content_length_header(body: &[u8]) -> Vec<u8> {
     format!("content-length:{}\n", body.len()).into_bytes()
 }
-
