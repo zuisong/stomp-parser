@@ -2,6 +2,7 @@ use super::*;
 use assert_matches2::assert_matches;
 use nom::AsBytes;
 use pretty_assertions::assert_eq;
+
 #[test]
 fn parse_and_serialize_connect() {
     let data = b"CONNECT
@@ -128,11 +129,12 @@ fn parse_a_incomplete_message() {
             _,
             StompFrame {
                 ref command,
-                headers: _,
+                headers,
                 body: None,
             },
         ))
     );
+    assert_eq!(headers, vec![]);
     assert_eq!(command, "MESSAG");
 
     assert_matches!(
@@ -147,9 +149,12 @@ fn parse_a_incomplete_message() {
 
     assert_matches!(
         parse_frame(b"\nMESSAGE\r\nheader:da\\ctafeeds.here.co.uk\n\n\0".as_ref()),
-        Ok((b"", StompFrame { headers: a, .. }))
+        Ok((b"", StompFrame { headers, .. }))
     );
-    assert_eq!(a[0].1, "da:tafeeds.here.co.uk".to_string());
+    assert_eq!(
+        headers,
+        vec![("header".into(), "da:tafeeds.here.co.uk".into())]
+    );
 
     assert_matches!(
         parse_frame(b"\nMESSAGE\r\ndestination:datafeeds.here.co.uk".as_ref()),
