@@ -1,6 +1,5 @@
 use super::*;
 use assert_matches2::assert_matches;
-use nom::AsBytes;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -256,7 +255,7 @@ fn test_serialize1() {
 fn test_serialize2() {
     let f = StompFrame {
         command: "MESSAGE".into(),
-        body: Some(b"body".as_bytes().into()),
+        body: Some(b"body".as_slice().into()),
         headers: vec![],
     };
 
@@ -272,7 +271,7 @@ body\0"
 fn test_serialize3() {
     let f = StompFrame {
         command: "MESSAGE".into(),
-        body: Some(b"body".as_bytes().into()),
+        body: Some(b"body".as_slice() .into()),
         headers: vec![("name\r\n:\\end".to_string(), "value\r\n:".to_string())],
     };
 
