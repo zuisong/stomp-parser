@@ -1,4 +1,5 @@
 use super::*;
+use crate::frame::{parse_frame, StompFrame};
 use assert_matches2::assert_matches;
 use pretty_assertions::assert_eq;
 
@@ -271,7 +272,7 @@ body\0"
 fn test_serialize3() {
     let f = StompFrame {
         command: "MESSAGE".into(),
-        body: Some(b"body".as_slice() .into()),
+        body: Some(b"body".as_slice().into()),
         headers: vec![("name\r\n:\\end".to_string(), "value\r\n:".to_string())],
     };
 
