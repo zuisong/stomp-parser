@@ -9,7 +9,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [
+            #
+            ubuntu-latest,
+            windows-latest,
+            macOS-latest,
+          ]
         rust_toolchain: [stable, nightly]
     runs-on: ${{ matrix.os }}
     steps:
@@ -18,7 +23,6 @@ jobs:
         with:
           toolchain: ${{ matrix.rust_toolchain }}
           components: clippy, rustfmt
-      - uses: cargo-bins/cargo-binstall@main
       - name: Build
         run: cargo build --verbose
       - name: Run tests
@@ -26,7 +30,9 @@ jobs:
       - name: Install cargo tools
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-llvm-cov,cargo-nextest
+          tool: cargo-llvm-cov,cargo-nextest,cargo-msrv
+      # - name: Verify whether the MSRV is satisfiable
+      #   run: cargo msrv verify
       - name: Generate code coverage
         run: cargo llvm-cov nextest --all-features --workspace --lcov --output-path lcov.info
       - name: Upload coverage to Codecov
