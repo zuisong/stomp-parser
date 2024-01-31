@@ -1,14 +1,20 @@
-use nom::{
-    branch::alt,
-    bytes::complete::{escaped_transform, take_while_m_n},
-    bytes::streaming::{is_not, tag, take, take_until},
-    character::streaming::{alpha1, line_ending, not_line_ending},
-    combinator::{complete, opt},
-    combinator::{map_res, value},
-    multi::{count, many0, many_till},
-    sequence::{delimited, separated_pair, terminated, tuple},
-    IResult, Parser,
-};
+use winnow::bytes::tag;
+use winnow::bytes::take;
+use winnow::token::take_while;
+use winnow::branch::alt;
+use winnow::ascii::alpha1;
+use winnow::ascii::line_ending;
+use winnow::ascii::not_line_ending;
+use winnow::combinator::opt;
+use winnow::combinator::repeat;
+use winnow::sequence::delimited;
+use winnow::sequence::separated_pair;
+use winnow::sequence::terminated;
+use winnow::Parser;
+use winnow::IResult;
+use winnow::bytes::take_till1;
+use winnow::bytes::take_until0;
+use winnow::ascii::escaped_transform;
 
 use std::borrow::Cow;
 
@@ -78,26 +84,26 @@ pub fn parse_frame(input: &[u8]) -> IResult<&[u8], StompFrame> {
     // dbg!(&String::from_utf8_lossy(input));
     // read stream until header end
     // drop result for save memory
-    many_till(take(1_usize).map(drop), count(line_ending, 2))(input)?;
+    // many_till(take(1_usize).map(drop), count(line_ending, 2)).parse(input)?;
 
-    let (input, (command, headers)) = tuple((
+    let (input, (command, headers)) = ((
         delimited(
-            opt(complete(line_ending)),
+            opt((line_ending).complete_err()),
             alpha1.map(String::from_utf8_lossy),
             line_ending,
         ), // command
         terminated(
-            many0(parse_header), // header
+            repeat(0.., parse_header), // header
             line_ending,
         ),
-    ))(input)?;
+    )).parse_next(input)?;
 
     let (input, body) = match get_content_length(&headers) {
-        None => take_until("\x00").map(map_empty_slice).parse(input)?,
-        Some(length) => take(length).map(Some).parse(input)?,
+        None => take_until0("\x00").map(map_empty_slice).parse_next(input)?,
+        Some(length) => take(length).map(Some).parse_next(input)?,
     };
 
-    let (input, _) = tuple((tag("\x00"), opt(complete(line_ending))))(input)?;
+    let (input, _) = ((tag("\x00"), opt((line_ending).complete_err()))).parse_next(input)?;
 
     Ok((
         input,
@@ -110,30 +116,30 @@ pub fn parse_frame(input: &[u8]) -> IResult<&[u8], StompFrame> {
 }
 
 fn parse_header(input: &[u8]) -> IResult<&[u8], (String, String)> {
-    complete(separated_pair(
-        is_not(":\r\n").and_then(unescape),
+    (separated_pair(
+        take_till1(":\r\n").and_then(unescape),
         tag(":"),
         terminated(not_line_ending, line_ending).and_then(unescape),
-    ))
-    .parse(input)
+    ).complete_err())
+        .parse_next(input)
 }
 
 fn unescape(input: &[u8]) -> IResult<&[u8], String> {
-    let mut f = map_res(
+    let mut f =
         escaped_transform(
-            take_while_m_n(1, 1, |c| c != b'\\'),
+            take_while(1, |c| c != b'\\'),
             '\\',
             alt((
-                value("\\".as_bytes(), tag("\\")),
-                value("\r".as_bytes(), tag("r")),
-                value("\n".as_bytes(), tag("n")),
-                value(":".as_bytes(), tag("c")),
+                tag("\\").value("\\".as_bytes()),
+                tag("r").value("\r".as_bytes()),
+                tag("n").value("\n".as_bytes()),
+                tag("c").value(":".as_bytes()),
             )),
-        ),
+        ).try_map(
         String::from_utf8,
     );
 
-    f.parse(input)
+    f.parse_next(input)
 }
 
 fn get_content_length_header(body: &[u8]) -> Vec<u8> {
