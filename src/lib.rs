@@ -1,22 +1,13 @@
-use winnow::bytes::tag;
-use winnow::bytes::take;
-use winnow::token::take_while;
-use winnow::branch::alt;
-use winnow::ascii::alpha1;
-use winnow::ascii::line_ending;
-use winnow::ascii::not_line_ending;
-use winnow::combinator::opt;
-use winnow::combinator::repeat;
-use winnow::sequence::delimited;
-use winnow::sequence::separated_pair;
-use winnow::sequence::terminated;
-use winnow::Parser;
-use winnow::IResult;
-use winnow::bytes::take_till1;
-use winnow::bytes::take_until0;
-use winnow::ascii::escaped_transform;
-
 use std::borrow::Cow;
+use winnow::error::ContextError;
+use winnow::{
+    ascii::{alpha1, escaped_transform, line_ending, till_line_ending},
+    combinator::{alt, delimited, opt, repeat, separated_pair, terminated},
+    token::{tag, take, take_till, take_until, take_while},
+    unpeek, IResult, PResult, Parser, Partial,
+};
+
+type Stream<'i> = Partial<&'i [u8]>;
 
 #[cfg(test)]
 mod tests;
@@ -69,7 +60,7 @@ impl<'a> StompFrame<'a> {
 
 fn get_content_length(headers: &Vec<(String, String)>) -> Option<usize> {
     for (name, value) in headers {
-        if name.as_str() == "content-length" {
+        if name.eq("content-length") {
             return value.parse::<usize>().ok();
         }
     }
@@ -80,15 +71,18 @@ fn map_empty_slice(s: &[u8]) -> Option<&[u8]> {
     Some(s).filter(|c| !c.is_empty())
 }
 
-pub fn parse_frame(input: &[u8]) -> IResult<&[u8], StompFrame> {
-    // dbg!(&String::from_utf8_lossy(input));
-    // read stream until header end
-    // drop result for save memory
-    // many_till(take(1_usize).map(drop), count(line_ending, 2)).parse(input)?;
+pub fn parse_frame<'a>(input: &'a [u8]) -> IResult<&'a [u8], StompFrame, ContextError> {
+    let mut partial: Partial<&'a [u8]> = Partial::new(input);
+    let result = { parse_frame_stream(&mut partial)? };
+    Ok((partial.into_inner(), result))
+}
 
-    let (input, (command, headers)) = ((
+pub fn parse_frame_stream<'a, 'b>(input: &'a mut Partial<&'b [u8]>) -> PResult<StompFrame<'b>> {
+    // dbg!(&String::from_utf8_lossy(input));
+
+    let (command, headers) = (
         delimited(
-            opt((line_ending).complete_err()),
+            opt(line_ending),
             alpha1.map(String::from_utf8_lossy),
             line_ending,
         ), // command
@@ -96,50 +90,48 @@ pub fn parse_frame(input: &[u8]) -> IResult<&[u8], StompFrame> {
             repeat(0.., parse_header), // header
             line_ending,
         ),
-    )).parse_next(input)?;
+    )
+        .parse_next(input)?;
 
-    let (input, body) = match get_content_length(&headers) {
-        None => take_until0("\x00").map(map_empty_slice).parse_next(input)?,
+    let body = match get_content_length(&headers) {
+        None => take_until(0.., "\x00")
+            .map(map_empty_slice)
+            .parse_next(input)?,
         Some(length) => take(length).map(Some).parse_next(input)?,
     };
 
-    let (input, _) = ((tag("\x00"), opt((line_ending).complete_err()))).parse_next(input)?;
+    (tag("\0"), opt(line_ending.complete_err())).parse_next(input)?;
 
-    Ok((
-        input,
-        StompFrame {
-            command,
-            headers,
-            body: body.map(Cow::Borrowed),
-        },
-    ))
+    Ok(StompFrame {
+        command,
+        headers,
+        body: body.map(Cow::Borrowed),
+    })
 }
 
-fn parse_header(input: &[u8]) -> IResult<&[u8], (String, String)> {
-    (separated_pair(
-        take_till1(":\r\n").and_then(unescape),
+fn parse_header(input: &mut Stream) -> PResult<(String, String)> {
+    separated_pair(
+        take_till(0.., [':', '\r', '\n']).and_then(unpeek(unescape)),
         tag(":"),
-        terminated(not_line_ending, line_ending).and_then(unescape),
-    ).complete_err())
+        terminated(till_line_ending, line_ending).and_then(unpeek(unescape)),
+    )
         .parse_next(input)
 }
 
-fn unescape(input: &[u8]) -> IResult<&[u8], String> {
-    let mut f =
-        escaped_transform(
-            take_while(1, |c| c != b'\\'),
-            '\\',
-            alt((
-                tag("\\").value("\\".as_bytes()),
-                tag("r").value("\r".as_bytes()),
-                tag("n").value("\n".as_bytes()),
-                tag("c").value(":".as_bytes()),
-            )),
-        ).try_map(
-        String::from_utf8,
-    );
+fn unescape(input: &[u8]) -> IResult<&[u8], String, ContextError> {
+    let mut f = escaped_transform(
+        take_while(1, |c| c != b'\\'),
+        '\\',
+        alt((
+            tag("\\").value("\\".as_bytes()),
+            tag("r").value("\r".as_bytes()),
+            tag("n").value("\n".as_bytes()),
+            tag("c").value(":".as_bytes()),
+        )),
+    )
+    .try_map(String::from_utf8);
 
-    f.parse_next(input)
+    f.parse_peek(input)
 }
 
 fn get_content_length_header(body: &[u8]) -> Vec<u8> {

@@ -29,6 +29,6 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-msrv
-      - run: cargo msrv verify
       - name: Find the minimum supported Rust version
         run: cargo msrv --output-format json --log-level debug
+      - run: cargo msrv verify

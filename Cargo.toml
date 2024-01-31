@@ -6,11 +6,11 @@ rust-version = "1.61"
 license = "MIT"
 
 [dependencies]
-winnow = "0.4"
+winnow = { version = "= 0.5" }
 
 [dev-dependencies]
 assert_matches2 = "0.1"
 pretty_assertions = { version = "1" }
 
 [metadata]
-msrv = "1.61"
+msrv = "1.64"
