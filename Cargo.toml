@@ -6,7 +6,7 @@ rust-version = "1.61"
 license = "MIT"
 
 [dependencies]
-winnow = { version = "= 0.5" }
+winnow = { version = "= 0.6" }
 
 [dev-dependencies]
 assert_matches2 = "0.1"

@@ -3,7 +3,7 @@ use winnow::error::ContextError;
 use winnow::{
     ascii::{alpha1, escaped_transform, line_ending, till_line_ending},
     combinator::{alt, delimited, opt, repeat, separated_pair, terminated},
-    token::{tag, take, take_till, take_until, take_while},
+    token::{literal, take, take_till, take_until, take_while},
     unpeek, IResult, PResult, Parser, Partial,
 };
 
@@ -100,7 +100,7 @@ pub fn parse_frame_stream<'a, 'b>(input: &'a mut Partial<&'b [u8]>) -> PResult<S
         Some(length) => take(length).map(Some).parse_next(input)?,
     };
 
-    (tag("\0"), opt(line_ending.complete_err())).parse_next(input)?;
+    (literal("\0"), opt(line_ending.complete_err())).parse_next(input)?;
 
     Ok(StompFrame {
         command,
@@ -112,10 +112,10 @@ pub fn parse_frame_stream<'a, 'b>(input: &'a mut Partial<&'b [u8]>) -> PResult<S
 fn parse_header(input: &mut Stream) -> PResult<(String, String)> {
     separated_pair(
         take_till(0.., [':', '\r', '\n']).and_then(unpeek(unescape)),
-        tag(":"),
+        literal(":"),
         terminated(till_line_ending, line_ending).and_then(unpeek(unescape)),
     )
-        .parse_next(input)
+    .parse_next(input)
 }
 
 fn unescape(input: &[u8]) -> IResult<&[u8], String, ContextError> {
@@ -123,10 +123,10 @@ fn unescape(input: &[u8]) -> IResult<&[u8], String, ContextError> {
         take_while(1, |c| c != b'\\'),
         '\\',
         alt((
-            tag("\\").value("\\".as_bytes()),
-            tag("r").value("\r".as_bytes()),
-            tag("n").value("\n".as_bytes()),
-            tag("c").value(":".as_bytes()),
+            literal("\\").value("\\".as_bytes()),
+            literal("r").value("\r".as_bytes()),
+            literal("n").value("\n".as_bytes()),
+            literal("c").value(":".as_bytes()),
         )),
     )
     .try_map(String::from_utf8);

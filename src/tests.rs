@@ -139,6 +139,11 @@ fn parse_a_incomplete_message() {
     );
 
     assert_matches!(
+        parse_frame(b"MESSAGE\r\ndestination:datafeeds.here.co.uk\n\n\0".as_ref()),
+        Ok(([], StompFrame { .. }))
+    );
+
+    assert_matches!(
         parse_frame(b"\nMESSAGE\r\ndestination:datafeeds.here.co.uk\n\n".as_ref()),
         Err(Incomplete(_))
     );
@@ -285,7 +290,7 @@ body\0"
 
 #[test]
 fn test_long_body() {
-    let body = "body".repeat(1000);
+    let body = "b\ndy".repeat(1000);
     let f = StompFrame {
         command: "MESSAGE".into(),
         body: Some(body.as_bytes().into()),
