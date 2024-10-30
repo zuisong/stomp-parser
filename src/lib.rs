@@ -19,41 +19,39 @@ pub struct StompFrame<'a> {
     body: Option<Cow<'a, [u8]>>,
 }
 
-impl<'a> StompFrame<'a> {
+impl StompFrame<'_> {
     pub fn serialize(&self) -> Cow<[u8]> {
         let mut buffer = Vec::new();
-        let buf: &mut Vec<u8> = &mut buffer;
-        fn write_escaped(b: u8, buffer: &mut Vec<u8>) {
-            let binding = [b];
-            let escaped: &[u8] = match &binding {
-                b"\r" => b"\\r",
-                b"\n" => b"\\n",
-                b":" => b"\\c",
-                b"\\" => b"\\\\",
-                bytes => bytes,
+        fn escaped(b: &u8) -> &[u8] {
+            let escaped: &[u8] = match b {
+                b'\r' => b"\\r",
+                b'\n' => b"\\n",
+                b':' => b"\\c",
+                b'\\' => b"\\\\",
+                bytes => std::slice::from_ref(bytes),
             };
-            buffer.extend_from_slice(escaped)
+           escaped
         }
-        buf.extend_from_slice(self.command.as_bytes());
-        buf.push(b'\n');
+        buffer.extend_from_slice(self.command.as_bytes());
+        buffer.push(b'\n');
         self.headers.iter().for_each(|(key, ref val)| {
             for byte in key.as_bytes() {
-                write_escaped(*byte, buf);
+               buffer.extend_from_slice(escaped(byte));
             }
-            buf.push(b':');
+            buffer.push(b':');
             for byte in val.as_bytes() {
-                write_escaped(*byte, buf);
+                buffer.extend_from_slice(escaped(byte));
             }
-            buf.push(b'\n');
+            buffer.push(b'\n');
         });
         if let Some(body) = &self.body {
-            buf.extend_from_slice(&get_content_length_header(body));
-            buf.push(b'\n');
-            buf.extend_from_slice(body);
+            buffer.extend_from_slice(&get_content_length_header(body));
+            buffer.push(b'\n');
+            buffer.extend_from_slice(body);
         } else {
-            buf.push(b'\n');
+            buffer.push(b'\n');
         }
-        buf.push(b'\x00');
+        buffer.push(b'\x00');
         Cow::Owned(buffer)
     }
 }
@@ -71,13 +69,13 @@ fn map_empty_slice(s: &[u8]) -> Option<&[u8]> {
     Some(s).filter(|c| !c.is_empty())
 }
 
-pub fn parse_frame<'a>(input: &'a [u8]) -> IResult<&'a [u8], StompFrame, ContextError> {
-    let mut partial: Partial<&'a [u8]> = Partial::new(input);
+pub fn parse_frame(input: &[u8]) -> IResult<&[u8], StompFrame, ContextError> {
+    let mut partial: Partial<& [u8]> = Partial::new(input);
     let result = { parse_frame_stream(&mut partial)? };
     Ok((partial.into_inner(), result))
 }
 
-pub fn parse_frame_stream<'a, 'b>(input: &'a mut Partial<&'b [u8]>) -> PResult<StompFrame<'b>> {
+pub fn parse_frame_stream<'b>(input: &mut Partial<&'b [u8]>) -> PResult<StompFrame<'b>> {
     // dbg!(&String::from_utf8_lossy(input));
 
     let (command, headers) = (

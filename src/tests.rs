@@ -56,7 +56,7 @@ subscription:some-id
         .map(|(k, v)| (k.as_bytes(), v.as_bytes()))
         .collect();
     assert_eq!(fh, headers_expect);
-    assert_eq!((&frame).body.as_ref().unwrap().as_ref(), (body.as_bytes()));
+    assert_eq!(frame.body.as_ref().unwrap().as_ref(), (body.as_bytes()));
 }
 
 #[test]
